@@ -63,25 +63,53 @@ async def health_check(request):
     })
 
 
+async def options_handler(request):
+    """Handle OPTIONS requests for CORS preflight"""
+    return web.Response(
+        status=200,
+        headers={
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            'Access-Control-Max-Age': '3600'
+        }
+    )
+
+
+@web.middleware
+async def cors_middleware(request, handler):
+    """CORS middleware для всех запросов"""
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        return web.Response(
+            status=200,
+            headers={
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Max-Age': '3600'
+            }
+        )
+    
+    # Handle actual request
+    response = await handler(request)
+    
+    # Add CORS headers to response
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    
+    return response
+
+
 def create_app():
     """Создать web приложение"""
-    app = web.Application()
-    
-    # Добавляем CORS headers
-    async def cors_middleware(app, handler):
-        async def middleware_handler(request):
-            response = await handler(request)
-            response.headers['Access-Control-Allow-Origin'] = '*'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-            return response
-        return middleware_handler
-    
-    app.middlewares.append(cors_middleware)
+    app = web.Application(middlewares=[cors_middleware])
     
     # Роуты
     app.router.add_get('/', health_check)
     app.router.add_get('/api/gifts', get_gifts)
+    app.router.add_options('/api/gifts', options_handler)
     
     return app
 
