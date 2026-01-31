@@ -151,13 +151,18 @@
         let gifts = [];
         let availableGifts = [];
 
-        // API endpoint (замени на свой)
-        const API_URL = 'https://1c03b4d0b81d.ngrok-free.app/api/gifts';  // Поменяй на свой домен!
+        // API endpoint - ОСТАВЛЯЕМ НГРОК (это адрес твоего сервера)
+        const API_URL = 'https://1c03b4d0b81d.ngrok-free.app/api/gifts';
 
         // Загрузка подарков из API
         async function loadGifts() {
             try {
-                const response = await fetch(API_URL);
+                // Добавляем заголовок для обхода предупреждения ngrok
+                const response = await fetch(API_URL, {
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true'
+                    }
+                });
                 const data = await response.json();
 
                 if (data.success && data.gifts.length > 0) {
