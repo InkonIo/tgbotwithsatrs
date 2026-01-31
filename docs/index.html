@@ -97,6 +97,29 @@
             margin: 5px 0;
             background: rgba(255,255,255,0.1);
             border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .prize-quantity {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+
+        .loading {
+            color: white;
+            font-size: 1.2em;
+        }
+
+        .error {
+            color: #ff6b6b;
+            padding: 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -106,19 +129,16 @@
         
         <div class="roulette">
             <div class="slot" id="gift-emoji">🎁</div>
-            <div class="gift-name" id="gift-name">Нажмите кнопку</div>
+            <div class="gift-name" id="gift-name">Загрузка...</div>
         </div>
 
-        <button id="spin-btn" onclick="spinRoulette()">
-            🎰 Крутить рулетку
+        <button id="spin-btn" onclick="spinRoulette()" disabled>
+            ⏳ Загрузка...
         </button>
 
-        <div class="prize-list">
-            <h3>🏆 Возможные призы:</h3>
-            <div class="prize-item">💎 Legendary Gift</div>
-            <div class="prize-item">⭐ Epic Gift</div>
-            <div class="prize-item">🎁 Rare Gift</div>
-            <div class="prize-item">🎀 Common Gift</div>
+        <div class="prize-list" id="prize-list">
+            <h3>🏆 Доступные призы:</h3>
+            <div class="loading">Загрузка подарков...</div>
         </div>
     </div>
 
@@ -127,15 +147,99 @@
         let tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Список подарков
-        const gifts = [
-            { emoji: '💎', name: 'Legendary Gift', rarity: 'legendary' },
-            { emoji: '⭐', name: 'Epic Gift', rarity: 'epic' },
-            { emoji: '🎁', name: 'Rare Gift', rarity: 'rare' },
-            { emoji: '🎀', name: 'Common Gift', rarity: 'common' }
-        ];
+        // Список подарков (загружается из API)
+        let gifts = [];
+        let availableGifts = [];
 
+        // API endpoint (замени на свой)
+        const API_URL = 'https://inkonio.github.io/tgbotwithsatrs/';  // Поменяй на свой домен!
+
+        // Загрузка подарков из API
+        async function loadGifts() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+
+                if (data.success && data.gifts.length > 0) {
+                    gifts = data.gifts;
+                    availableGifts = gifts.filter(g => g.quantity > 0);
+
+                    // Обновляем UI
+                    updatePrizeList();
+                    
+                    // Включаем кнопку
+                    const button = document.getElementById('spin-btn');
+                    button.disabled = false;
+                    button.textContent = '🎰 Крутить рулетку';
+                    
+                    document.getElementById('gift-name').textContent = 'Нажмите кнопку';
+                } else {
+                    showError('Подарки закончились! 😢');
+                }
+            } catch (error) {
+                console.error('Error loading gifts:', error);
+                showError('Ошибка загрузки подарков. Попробуйте позже.');
+            }
+        }
+
+        // Обновить список призов
+        function updatePrizeList() {
+            const prizeList = document.getElementById('prize-list');
+            
+            if (availableGifts.length === 0) {
+                prizeList.innerHTML = '<h3>🏆 Доступные призы:</h3><div class="error">Все подарки разобрали! 😢</div>';
+                return;
+            }
+
+            let html = '<h3>🏆 Доступные призы:</h3>';
+            
+            availableGifts.forEach(gift => {
+                html += `
+                    <div class="prize-item">
+                        <span>${gift.emoji} ${gift.name}</span>
+                        <span class="prize-quantity">${gift.quantity} шт</span>
+                    </div>
+                `;
+            });
+            
+            prizeList.innerHTML = html;
+        }
+
+        // Показать ошибку
+        function showError(message) {
+            const prizeList = document.getElementById('prize-list');
+            prizeList.innerHTML = `<div class="error">${message}</div>`;
+            
+            document.getElementById('gift-name').textContent = 'Ошибка';
+        }
+
+        // Функция рулетки с взвешенной вероятностью
+        function getWeightedRandomGift() {
+            const weights = {
+                'legendary': 1,
+                'epic': 3,
+                'rare': 10,
+                'common': 30
+            };
+
+            const weighted = [];
+            availableGifts.forEach(gift => {
+                const weight = weights[gift.rarity] || 10;
+                for (let i = 0; i < weight; i++) {
+                    weighted.push(gift);
+                }
+            });
+
+            return weighted[Math.floor(Math.random() * weighted.length)];
+        }
+
+        // Крутить рулетку
         function spinRoulette() {
+            if (availableGifts.length === 0) {
+                showError('Все подарки разобрали! 😢');
+                return;
+            }
+
             const button = document.getElementById('spin-btn');
             const giftEmoji = document.getElementById('gift-emoji');
             const giftName = document.getElementById('gift-name');
@@ -147,22 +251,24 @@
             // Анимация
             let counter = 0;
             const interval = setInterval(() => {
-                const randomGift = gifts[Math.floor(Math.random() * gifts.length)];
+                const randomGift = availableGifts[Math.floor(Math.random() * availableGifts.length)];
                 giftEmoji.textContent = randomGift.emoji;
                 counter++;
 
                 if (counter > 20) {
                     clearInterval(interval);
                     
-                    // Финальный результат
-                    const finalGift = gifts[Math.floor(Math.random() * gifts.length)];
+                    // Финальный результат (с взвешенной вероятностью)
+                    const finalGift = getWeightedRandomGift();
                     giftEmoji.textContent = finalGift.emoji;
                     giftName.textContent = finalGift.name;
 
                     // Отправляем данные боту
                     setTimeout(() => {
                         tg.sendData(JSON.stringify({
+                            gift_id: finalGift.id,
                             gift: finalGift.name,
+                            emoji: finalGift.emoji,
                             rarity: finalGift.rarity,
                             user_id: tg.initDataUnsafe.user?.id
                         }));
@@ -172,6 +278,9 @@
                 }
             }, 100);
         }
+
+        // Загружаем подарки при старте
+        loadGifts();
     </script>
 </body>
 </html>

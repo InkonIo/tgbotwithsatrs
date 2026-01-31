@@ -1,13 +1,16 @@
 """
-Userbot for sending gifts (@Lowatje)
-Listens for commands from the main bot and sends gifts to winners
+Userbot for sending gifts (@Lowatje) - using Telethon
+Listens for stickers and sends gifts to winners from database
 """
 
 import os
 import logging
+from datetime import datetime
 from dotenv import load_dotenv
-from pyrogram import Client, filters
-from pyrogram.types import Message
+from telethon import TelegramClient, events
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from database.models import get_session, Win, Gift
 
 # Load environment variables
 load_dotenv()
@@ -24,75 +27,82 @@ API_ID = int(os.getenv('USERBOT_API_ID'))
 API_HASH = os.getenv('USERBOT_API_HASH')
 PHONE = os.getenv('USERBOT_PHONE')
 
-# Create userbot client
-app = Client(
-    "gift_sender",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    phone_number=PHONE
-)
+# Create client
+client = TelegramClient('gift_sender', API_ID, API_HASH)
 
 
-@app.on_message(filters.private & filters.incoming)
-async def handle_incoming_message(client: Client, message: Message):
-    """Обработчик входящих сообщений"""
-    user = message.from_user
+@client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
+async def handle_incoming_message(event):
+    """Обработчик входящих личных сообщений"""
+    sender = await event.get_sender()
     
-    logger.info(f"Received message from {user.id} (@{user.username}): {message.text}")
+    logger.info(f"Received message from {sender.id} (@{sender.username})")
     
-    # Если пользователь отправил стикер (как требуется в ТЗ)
-    if message.sticker:
-        await message.reply_text(
-            "✅ Спасибо! Ваш подарок скоро будет отправлен.\n"
-            "Пожалуйста, подождите..."
-        )
+    # Если пользователь отправил стикер
+    if event.message.sticker:
+        logger.info(f"User {sender.id} sent sticker. Checking database...")
         
-        # TODO: Здесь будет логика отправки подарка
-        # Пока просто логируем
-        logger.info(f"User {user.id} sent sticker. Ready to send gift.")
+        # Проверяем БД - есть ли у этого пользователя pending приз
+        session = get_session()
+        
+        pending_win = session.query(Win).join(Gift).filter(
+            Win.telegram_user_id == sender.id,
+            Win.status == 'pending'
+        ).first()
+        
+        if pending_win:
+            # Есть приз!
+            gift = pending_win.gift
+            
+            logger.info(f"Found pending gift for user {sender.id}: {gift.name}")
+            
+            # Отправляем эмодзи подарка (пока без реального)
+            await event.reply(
+                f"🎁 Поздравляем!\n\n"
+                f"Ваш подарок: {gift.emoji} {gift.name}!\n\n"
+                f"✨ Приз отправлен! 🎉\n\n"
+                f"(Пока это эмодзи, когда у меня появятся реальные подарки "
+                f"в Telegram - они будут отправляться автоматически)"
+            )
+            
+            # Обновляем статус в БД
+            pending_win.status = 'sent'
+            pending_win.sent_at = datetime.utcnow()
+            session.commit()
+            
+            logger.info(f"Gift {gift.name} sent to user {sender.id}")
+            
+        else:
+            # Нет приза
+            logger.info(f"No pending gift for user {sender.id}")
+            
+            await event.reply(
+                "🤔 Похоже, у вас пока нет выигрышей!\n\n"
+                "Чтобы получить приз:\n"
+                "1. Выбейте джекпот 777 в боте\n"
+                "2. Покрутите рулетку призов\n"
+                "3. Отправьте мне стикер\n\n"
+                "Удачи! 🍀"
+            )
+        
+        session.close()
 
 
-@app.on_message(filters.command("send_gift") & filters.me)
-async def send_gift_command(client: Client, message: Message):
-    """
-    Команда для отправки подарка
-    Формат: /send_gift <user_id> <gift_name>
-    """
-    try:
-        parts = message.text.split()
-        if len(parts) < 3:
-            await message.edit("❌ Формат: /send_gift <user_id> <gift_name>")
-            return
-        
-        user_id = int(parts[1])
-        gift_name = " ".join(parts[2:])
-        
-        # TODO: Здесь будет реальная отправка подарка через Telegram API
-        # Пока просто отправляем текстовое сообщение
-        await client.send_message(
-            user_id,
-            f"🎁 Поздравляем!\n\n"
-            f"Вы выиграли: **{gift_name}**\n\n"
-            f"Подарок отправлен! Проверьте свой профиль."
-        )
-        
-        await message.edit(f"✅ Подарок '{gift_name}' отправлен пользователю {user_id}")
-        logger.info(f"Gift '{gift_name}' sent to user {user_id}")
-        
-    except Exception as e:
-        logger.error(f"Error sending gift: {e}")
-        await message.edit(f"❌ Ошибка: {e}")
-
-
-def main():
-    """Запуск юзербота"""
+async def main():
+    """Запуск userbot"""
     logger.info("🤖 Userbot starting...")
     logger.info(f"📱 Phone: {PHONE}")
     logger.info(f"🆔 API ID: {API_ID}")
     
     # Запускаем клиент
-    app.run()
+    await client.start(phone=PHONE)
+    
+    logger.info("✅ Userbot is running!")
+    logger.info("Waiting for messages...")
+    
+    # Держим бота запущенным
+    await client.run_until_disconnected()
 
 
 if __name__ == '__main__':
-    main()
+    client.loop.run_until_complete(main())
