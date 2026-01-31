@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>777 Gift Roulette</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            padding: 20px;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .roulette {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin: 20px 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .slot {
+            font-size: 4em;
+            margin: 10px 0;
+            animation: spin 1s ease-in-out;
+        }
+
+        @keyframes spin {
+            0% { transform: rotateX(0deg); }
+            50% { transform: rotateX(180deg); }
+            100% { transform: rotateX(360deg); }
+        }
+
+        button {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2em;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .gift-name {
+            color: #667eea;
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+
+        .prize-list {
+            margin-top: 30px;
+            text-align: left;
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 15px;
+        }
+
+        .prize-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎰 Рулетка Призов 🎁</h1>
+        
+        <div class="roulette">
+            <div class="slot" id="gift-emoji">🎁</div>
+            <div class="gift-name" id="gift-name">Нажмите кнопку</div>
+        </div>
+
+        <button id="spin-btn" onclick="spinRoulette()">
+            🎰 Крутить рулетку
+        </button>
+
+        <div class="prize-list">
+            <h3>🏆 Возможные призы:</h3>
+            <div class="prize-item">💎 Legendary Gift</div>
+            <div class="prize-item">⭐ Epic Gift</div>
+            <div class="prize-item">🎁 Rare Gift</div>
+            <div class="prize-item">🎀 Common Gift</div>
+        </div>
+    </div>
+
+    <script>
+        // Инициализация Telegram Web App
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Список подарков
+        const gifts = [
+            { emoji: '💎', name: 'Legendary Gift', rarity: 'legendary' },
+            { emoji: '⭐', name: 'Epic Gift', rarity: 'epic' },
+            { emoji: '🎁', name: 'Rare Gift', rarity: 'rare' },
+            { emoji: '🎀', name: 'Common Gift', rarity: 'common' }
+        ];
+
+        function spinRoulette() {
+            const button = document.getElementById('spin-btn');
+            const giftEmoji = document.getElementById('gift-emoji');
+            const giftName = document.getElementById('gift-name');
+
+            // Отключаем кнопку
+            button.disabled = true;
+            button.textContent = '⏳ Крутим...';
+
+            // Анимация
+            let counter = 0;
+            const interval = setInterval(() => {
+                const randomGift = gifts[Math.floor(Math.random() * gifts.length)];
+                giftEmoji.textContent = randomGift.emoji;
+                counter++;
+
+                if (counter > 20) {
+                    clearInterval(interval);
+                    
+                    // Финальный результат
+                    const finalGift = gifts[Math.floor(Math.random() * gifts.length)];
+                    giftEmoji.textContent = finalGift.emoji;
+                    giftName.textContent = finalGift.name;
+
+                    // Отправляем данные боту
+                    setTimeout(() => {
+                        tg.sendData(JSON.stringify({
+                            gift: finalGift.name,
+                            rarity: finalGift.rarity,
+                            user_id: tg.initDataUnsafe.user?.id
+                        }));
+                    }, 1000);
+
+                    button.textContent = '✅ Подарок получен!';
+                }
+            }, 100);
+        }
+    </script>
+</body>
+</html>
